@@ -1,0 +1,60 @@
+name: Bilibili User Checker
+
+on:
+  schedule:
+    - cron: "*/6 * * * *"  # 每6分钟执行一次
+
+jobs:
+  check_lowlevel:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      # 安装 Python 和所需依赖
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+
+      # 安装请求模块
+      - name: Install required packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      # 获取当前的开始UID，若不存在则初始化为646503378
+      - name: Get current start UID
+        id: get_uid
+        run: |
+          if [ ! -f "last_uid.txt" ]; then
+            echo "Starting UID: 646503378" > last_uid.txt
+          else
+            last_uid=$(cat last_uid.txt)
+            echo "Starting UID: $last_uid"
+          fi
+
+      # 执行检查脚本
+      - name: Run check_lowlevel.sh
+        run: |
+          start_uid=$(cat last_uid.txt)
+          end_uid=$((start_uid + 140))
+          ./check_lowlevel.sh $start_uid $end_uid
+
+      # 保存最新的进度到last_uid.txt
+      - name: Save progress
+        run: |
+          last_uid=$(cat last_uid.txt)
+          new_last_uid=$((last_uid + 140))
+          echo $new_last_uid > last_uid.txt
+
+      # 提交更改（如果有变化）
+      - name: Commit and push changes
+        run: |
+          git config --global user.email "youremail@example.com"
+          git config --global user.name "Your Name"
+          git add .
+          git commit -m "Update Lowlevel list and progress" || echo "No changes to commit"
+          git push
