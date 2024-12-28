@@ -1,51 +1,71 @@
 import requests
 
-def get_user_info(uid, option):
-    # 定义Bilibili用户信息API的基础URL
+def extract_bilibili_data(uid, param_sum):
+    """
+    从 Bilibili API 获取指定用户信息，根据参数和返回对应字段。
+    
+    参数:
+        uid: int - 用户 ID
+        param_sum: int - 需要获取的字段和，按位表示字段选择。
+        
+    返回:
+        list - 按 param_sum 指定的字段顺序返回对应数据。
+    """
+    # 数据字段与对应参数的映射
+    param_mapping = {
+        1: "name",
+        2: "sex",
+        4: "face",
+        8: "sign",
+        16: "level",
+        32: "coins",
+        64: "birthday",
+        128: "school",
+        256: "fans_badge",
+        512: "live_room",
+        1024: "vip",
+    }
+
+    # API URL
     api_url = f"https://api.bilibili.com/x/space/acc/info?mid={uid}"
-    stat_url = f"https://api.bilibili.com/x/relation/stat?vmid={uid}"
     
     try:
-        # 获取用户基本信息
-        info_response = requests.get(api_url)
-        info_data = info_response.json()
+        # 请求 API
+        response = requests.get(api_url)
+        response.raise_for_status()
+        api_response = response.json()
         
-        # 获取用户的关注和粉丝信息
-        stat_response = requests.get(stat_url)
-        stat_data = stat_response.json()
+        # 检查 API 返回状态
+        if api_response.get("code") != 0:
+            return {"错误": f"API 返回异常，code: {api_response.get('code')}"}
+
+        # 获取用户数据
+        data = api_response.get("data", {})
         
-        if info_data["code"] != 0 or stat_data["code"] != 0:
-            return "无法获取用户信息，可能UID不存在。"
-
-        # 解析数据
-        username = info_data["data"].get("name")
-        level = info_data["data"].get("level")
-        following = stat_data["data"].get("following")
-        follower = stat_data["data"].get("follower")
-        likes_url = f"https://api.bilibili.com/x/space/upstat?mid={uid}"
-        likes_response = requests.get(likes_url)
-        likes_data = likes_response.json()
-        likes = likes_data["data"].get("likes") if likes_data["code"] == 0 else None
-
-        # 根据选项构建结果
-        result = {}
-        if option & 1:  # 获取用户名
-            result["用户名"] = username
-        if option & 2:  # 获取用户等级
-            result["等级"] = level
-        if option & 4:  # 获取用户关注数
-            result["关注数"] = following
-        if option & 8:  # 获取用户粉丝数
-            result["粉丝数"] = follower
-        if option & 16:  # 获取用户获得赞数
-            result["赞数"] = likes
-
+        # 提取需要的数据
+        result = []
+        for key, field in param_mapping.items():
+            if param_sum & key:  # 检查对应位是否为1
+                value = data.get(field, None)
+                # 如果是嵌套字段（如 school 和 live_room），需要额外处理
+                if isinstance(value, dict):
+                    result.append(value.get("name", None) if field == "school" else value)
+                else:
+                    result.append(value)
+        
         return result
-
+    
+    except requests.RequestException as e:
+        return {"错误": f"网络请求失败: {e}"}
+    except ValueError as e:
+        return {"错误": f"JSON 解析失败: {e}"}
     except Exception as e:
-        return f"发生错误: {e}"
-if __name__ == '__main__':
+        return {"错误": f"未知错误: {e}"}
+
+
+if __name__ == "__main__":
     # 示例调用
     uid = 646503378
-    option = 1 + 2  # 获取用户名和等级
-    print(get_user_info(uid, option))
+    param_sum = 3  # 1 (name) + 2 (sex)
+    result = extract_bilibili_data(uid, param_sum)
+    print(result)
